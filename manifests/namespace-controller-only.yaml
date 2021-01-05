@@ -113,6 +113,8 @@ subjects:
   name: argo
 ---
 apiVersion: v1
+data:
+  containerRuntimeExecutor: pns
 kind: ConfigMap
 metadata:
   name: workflow-controller-configmap
