@@ -9,22 +9,16 @@ dist/operator-%: go.mod $(shell find cmd -type f)
 image: dist/operator-linux-amd64
 	docker build . -t argoproj/argo-workflows-operator:latest
 
-/usr/local/bin/kustomize:
-	mkdir -p dist
-	./hack/recurl.sh dist/install_kustomize.sh https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh
-	chmod +x ./dist/install_kustomize.sh
-	./dist/install_kustomize.sh 3.8.8
-	sudo mv kustomize /usr/local/bin/
-	kustomize version
 
 manifests/install.yaml:
 manifests/namespace-controller-only.yaml:
 
-.PHONY: manifests/%.yaml
-manifests/%.yaml: /usr/local/bin/kustomize
+manifests/%.yaml:
 	kustomize build --load_restrictor=none manifests/$* -o manifests/$*.yaml
 
-.PHONY: start
-start: manifests/install.yaml image
+start: manifests/install.yaml manifests/namespace-controller-only.yaml image
 	k3d image import argoproj/argo-workflows-operator:latest
-	kubectl apply -f manifests/install.yaml
+	kubectl -n argo apply -f manifests/install.yaml
+	kubectl -n argo rollout restart deploy/operator
+	sleep 10s
+	kubectl -n argo logs deploy/operator --follow
