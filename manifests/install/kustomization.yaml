@@ -3,6 +3,6 @@ kind: Kustomization
 
 resources:
   - operator-sa.yaml
-  - operator-clusterrole.yaml
-  - operator-clusterrolebinding.yaml
+  - argo-workflows-operator-clusterrole.yaml
+  - argo-workflows-operator-clusterrolebinding.yaml
   - operator-deployment.yaml

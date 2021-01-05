@@ -14,7 +14,7 @@ spec:
       serviceAccountName: operator
       containers:
         - name: operator
-          image: argoproj/argooperator:latest
+          image: argoproj/argo-workflows-operator:latest
           imagePullPolicy: IfNotPresent
           securityContext:
             capabilities:
