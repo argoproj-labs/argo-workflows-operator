@@ -12,7 +12,7 @@ The operator listens to `workflows` and `cronworkflows` in all namespaces. When 
 
 * Is there a workflow controller in the namespace already scaled up?
 * Is it managed by the operator? i.e. labelled `app.kubernetes.io/managed-by=argo-workflows-operator`
-* Is it the correct version? i.e. labelled `app.kubernetes.io/version=$(sha1 manifests.yaml)`
+* Is it the correct version? i.e. labelled `app.kubernetes.io/version=$(hex $(sha1 manifests.yaml))`
 
 If does not exist, is managed, is scaled-down or out of date, then it'll update the workflow controller.
 
@@ -24,17 +24,23 @@ Install Argo Workflows CRDs:
 kustomize build https://github.com/argoproj/argo/manifests/base/crds/minimal\?ref\=stable | kubectl apply -f -
 ```
 
-Install the operator
+Install the operator:
 
 ```bash
 kubectl create ns argo
 kubectl -n argo apply -f https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/install.yaml
 ```
 
+Tip: you check the behaviour in the operator logs:
+
+```bash
+kubectl -n argo logs deploy/operator --follow
+```
+
 Create a user namespace:
 
 ```bash
-kubectl create ns my-ns 
+kubectl create ns my-ns
 ```
 
 Create the workflow role:
@@ -44,10 +50,16 @@ kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable
 kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-default-rolebinding.yaml
 ```
 
-Create a workflow
+Submit a workflow (which will cause a scale-up):
 
 ```bash
 argo submit -n my-ns --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+```
+
+Delete all workflows (which will cause a scale-down):
+
+```bash
+kubectl -n my-ns delete wf --all
 ```
 
 ## Options
