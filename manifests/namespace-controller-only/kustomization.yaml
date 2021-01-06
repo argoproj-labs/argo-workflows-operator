@@ -5,9 +5,6 @@ resources:
   - https://github.com/argoproj/argo/manifests/base/workflow-controller?ref=stable
   - https://github.com/argoproj/argo/manifests/namespace-install/workflow-controller-rbac?ref=stable
 
-patchesStrategicMerge:
-  - ./overlays/workflow-controller-configmap.yaml
-
 patchesJson6902:
   - target:
       version: v1

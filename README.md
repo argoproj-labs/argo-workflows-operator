@@ -19,7 +19,7 @@ The operator keeps count of `cronworkflows` and incomplete `workflows`. When the
 
 * Is there a workflow controller in the namespace which is already scaled up?
 * Is it managed by the operator? i.e. labelled `app.kubernetes.io/managed-by=argo-workflows-operator`
-* Is it the expected version? i.e. labelled `app.kubernetes.io/version=$(hex $(sha1 /tmp/manifests.yaml))`
+* Is it the expected hash? i.e. labelled `argo-workflows-operator.argoproj-labs.io/hash=$(hex $(sha1 /tmp/manifests.yaml))`
 
 If does not exist, is managed, is scaled-down or out of date, then it'll apply the manifests creating the appropriate resources.
 
@@ -119,5 +119,5 @@ Flags:
 
 ## Roadmap
 
-* We'll want a way to prevent the operator from installing into namespaces. It might be opt-in or might be opt-out.
+* We might want a way to prevent the operator from installing into namespaces. It might be opt-in or might be opt-out.
 * Some namespaces are likely to need some kind of special set-up or configuration, e.g. due to some namespaces being high-load, or having different controller configuration.

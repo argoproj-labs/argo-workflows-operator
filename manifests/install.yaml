@@ -23,7 +23,6 @@ rules:
   verbs:
   - create
   - get
-  - update
   - patch
 - apiGroups:
   - ""
@@ -32,7 +31,7 @@ rules:
   verbs:
   - create
   - get
-  - update
+  - patch
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
@@ -40,7 +39,7 @@ rules:
   verbs:
   - create
   - get
-  - update
+  - patch
   - escalate
   - bind
 - apiGroups:
@@ -50,7 +49,7 @@ rules:
   verbs:
   - create
   - get
-  - update
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -58,7 +57,7 @@ rules:
   verbs:
   - create
   - get
-  - update
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -66,7 +65,7 @@ rules:
   verbs:
   - create
   - get
-  - update
+  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -75,7 +74,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: operator
+  name: argo-workflows-operator
 subjects:
 - kind: ServiceAccount
   name: operator
@@ -98,6 +97,10 @@ spec:
       - image: argoproj/argo-workflows-operator:latest
         imagePullPolicy: IfNotPresent
         name: operator
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
         securityContext:
           capabilities:
             drop:

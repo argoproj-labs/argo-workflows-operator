@@ -16,6 +16,8 @@ manifests/%.yaml:
 	kustomize build --load_restrictor=none manifests/$* -o manifests/$*.yaml
 
 start: manifests/install.yaml manifests/namespace-controller-only.yaml image
+	k3d cluster get || k3d cluster create --no-lb --no-hostip --switch-context
+	kubectl config set-context --current --namespace=argo
 	kustomize build 'https://github.com/argoproj/argo/manifests/base/crds/minimal?ref=stable' | kubectl apply -f -
 	kubectl get ns argo || kubectl create ns argo
 	k3d image import argoproj/argo-workflows-operator:latest

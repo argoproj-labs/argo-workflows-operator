@@ -20,7 +20,6 @@ rules:
     verbs:
       - create
       - get
-      - update
       - patch
   - apiGroups:
       - ""
@@ -29,7 +28,7 @@ rules:
     verbs:
       - create
       - get
-      - update
+      - patch
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -37,7 +36,7 @@ rules:
     verbs:
       - create
       - get
-      - update
+      - patch
       - escalate
       - bind
   - apiGroups:
@@ -47,7 +46,7 @@ rules:
     verbs:
       - create
       - get
-      - update
+      - patch
   - apiGroups:
       - ""
     resources:
@@ -55,7 +54,7 @@ rules:
     verbs:
       - create
       - get
-      - update
+      - patch
   - apiGroups:
       - ""
     resources:
@@ -63,4 +62,4 @@ rules:
     verbs:
       - create
       - get
-      - update
+      - patch

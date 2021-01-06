@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hashicorp/go-getter"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -33,8 +32,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const managedBy = "app.kubernetes.io/managed-by"
+const managedByLabel = "app.kubernetes.io/managed-by"
 const managerName = "argo-workflows-operator"
+const hashLabel = "argo-workflows-operator.argoproj-labs.io/hash"
 
 func main() {
 	var (
@@ -80,11 +80,11 @@ func main() {
 
 			// get manifests
 			manifests := "/tmp/manifests.yaml"
-			err = getter.GetFile(manifests, src)
+			err = downloadFile(manifests, src)
 			if err != nil {
-				log.Fatal(fmt.Errorf("failed to get manifests: %w", err))
+				log.Fatal(fmt.Errorf("failed to download manifests: %w", err))
 			}
-			version, err := hashFile(manifests)
+			hash, err := hashFile(manifests)
 			if err != nil {
 				log.Fatal(fmt.Errorf("failed to hash manifests: %w", err))
 			}
@@ -103,9 +103,8 @@ func main() {
 					new.SetLabels(map[string]string{})
 				}
 				labels := new.GetLabels()
-				labels[managedBy] = managerName                        // we will not change resource that are not managed
-				labels["app.kubernetes.io/part-of"] = "argo-workflows" // this is only added to help understand what this resource is part-of
-				labels["app.kubernetes.io/version"] = version          // we add the sha1 hash of the resources
+				labels[managedByLabel] = managerName // we will not change resource that are not managed
+				labels[hashLabel] = hash             // we add the sha1 hash of the resources
 				new.SetLabels(labels)
 				resources = append(resources, new)
 			}
@@ -115,7 +114,7 @@ func main() {
 			}
 
 			// starting here
-			log.WithFields(log.Fields{"version": version, "resources": len(resources)}).Info()
+			log.WithFields(log.Fields{"hash": hash, "resources": len(resources)}).Info()
 			informers := make([]cache.SharedIndexInformer, 0)
 			countResources := func(namespace string) int {
 				count := 0
@@ -138,8 +137,8 @@ func main() {
 				default:
 					// is found
 					scaledUp := deploy.Spec.Replicas == nil || *deploy.Spec.Replicas >= 1
-					oldVersion := deploy.GetLabels()["app.kubernetes.io/version"]
-					upToDate := oldVersion == version
+					oldVersion := deploy.GetLabels()[hashLabel]
+					upToDate := oldVersion == hash
 					logCtx.WithFields(log.Fields{"scaledUp": scaledUp, "upToDate": upToDate, "oldVersion": oldVersion}).Debug()
 					if upToDate && scaledUp {
 						return nil
@@ -167,7 +166,7 @@ func main() {
 						case err != nil:
 							return fmt.Errorf("failed to get %v: %w", key, err)
 						}
-						if old.GetLabels()[managedBy] != managerName {
+						if old.GetLabels()[managedByLabel] != managerName {
 							logCtx.Infof("%v un-managed", key)
 							continue
 						}
@@ -193,7 +192,6 @@ func main() {
 				logCtx := log.WithField("namespace", namespace)
 				logCtx.Info("scaling-down")
 				_, err := k.AppsV1().Deployments(namespace).Patch("workflow-controller", types.MergePatchType, []byte(`{"spec": {"replicas": 0}}`))
-
 				return err
 			}
 
