@@ -9,10 +9,6 @@ This is not a fully-formed operator (yet).
 * You only need the workflow controller, or your Argo Server is managed elsewhere.
 * You want to install into many namespaces (for isolation) and have the controller be scaled-to-zero for cost-saving.
 
-## What This Is Not
-
-This is a deployment tool, but is not 
-
 ## Summary
 
 This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but to scale each installation to zero until needed.
