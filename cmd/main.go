@@ -113,16 +113,15 @@ func main() {
 					// is found
 					scaledUp := deploy.Spec.Replicas == nil || *deploy.Spec.Replicas >= 1
 					oldVersion := deploy.GetLabels()["app.kubernetes.io/version"]
-					managed := deploy.GetLabels()["app.kubernetes.io/managed-by"] == "argo-workflows-operator"
 					upToDate := oldVersion == version
-					logCtx.WithFields(log.Fields{"scaledUp": scaledUp, "upToDate": upToDate, "managed": managed, "oldVersion": oldVersion}).Debug()
-					if upToDate && scaledUp || !managed {
+					logCtx.WithFields(log.Fields{"scaledUp": scaledUp, "upToDate": upToDate, "oldVersion": oldVersion}).Debug()
+					if upToDate && scaledUp {
 						return nil
 					}
 				}
 				// perform a dry-run first so we reduce the risk of applying some, but not all, of the resources
+				logCtx.Info("scaling-up/updating")
 				for _, dryRun := range [][]string{{"All"}, nil} {
-					logCtx.WithField("dryRun", dryRun).Info("scaling-up/updating")
 					for _, part := range resources {
 						new := &unstructured.Unstructured{}
 						err = yaml.Unmarshal([]byte(part), new)
@@ -133,8 +132,8 @@ func main() {
 							new.SetLabels(map[string]string{})
 						}
 						labels := new.GetLabels()
-						labels["app.kubernetes.io/managed-by"] = "argo-workflows-operator"
-						labels["app.kubernetes.io/part-of"] = "argo-workflows"
+						labels["app.kubernetes.io/managed-by"] = "argo-workflows-operator" // we will not change resource that are not managed
+						labels["app.kubernetes.io/part-of"] = "argo-workflows"             // this is only added to help understand what this resource is part-of
 						labels["app.kubernetes.io/version"] = version
 						new.SetLabels(labels)
 						resource := strings.ToLower(new.GetKind()) + "s"
@@ -156,6 +155,10 @@ func main() {
 						case err != nil:
 							return fmt.Errorf("failed to get %v: %w", key, err)
 						}
+						if old.GetLabels()["app.kubernetes.io/managed-by"] != "argo-workflows-operator" {
+							logCtx.Infof("%v un-managed", key)
+							continue
+						}
 						diffs, err := diff(normalize(old), new)
 						if err != nil {
 							return fmt.Errorf("failed to diff %v: %w", key, err)
@@ -164,7 +167,7 @@ func main() {
 							logCtx.Infof("%v unchanged", key)
 							continue
 						}
-						logCtx.Info(diffs)
+						logCtx.Debug(diffs)
 						_, err = r.Patch(new.GetName(), types.StrategicMergePatchType, []byte(diffs), metav1.PatchOptions{DryRun: dryRun})
 						if err != nil {
 							return fmt.Errorf("failed to patch %v: %w", key, err)
@@ -203,7 +206,7 @@ func main() {
 					10*time.Minute,
 					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 					func(options *metav1.ListOptions) {
-						options.LabelSelector = "workflows.argoproj.io/completed!=true"
+						options.LabelSelector = "workflows.argoproj.io/completed!=true" // will be ignored for cronworkflows
 					},
 				).Informer()
 

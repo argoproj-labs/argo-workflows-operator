@@ -2,19 +2,30 @@
 
 **PROOF OF CONCEPT**
 
+This is not a fully-formed operator (yet).
+
+## Use Case
+
+* You only need the workflow controller, or your Argo Server is managed elsewhere.
+* You want to install into many namespaces (for isolation) and have the controller be scaled-to-zero for cost-saving.
+
+## What This Is Not
+
+This is a deployment tool, but is not 
+
 ## Summary
 
 This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but to scale each installation to zero until needed.
 
-When it starts up, it'll get the source manifests and save it as `manifests.yaml`. 
+When it starts up, it'll get your manifests and save it as `/tmp/manifests.yaml`. 
 
-The operator listens to `workflows` and `cronworkflows` in all namespaces. When one of these comes into existence in a namespace, it waits a short period of time (`scale-up-duration`) and then checks:
+The operator keeps count of `cronworkflows` and incomplete `workflows`. When the count for a namespace in greater than zero, it waits a short period of time (`scale-up`) and then checks:
 
-* Is there a workflow controller in the namespace already scaled up?
+* Is there a workflow controller in the namespace which is already scaled up?
 * Is it managed by the operator? i.e. labelled `app.kubernetes.io/managed-by=argo-workflows-operator`
-* Is it the correct version? i.e. labelled `app.kubernetes.io/version=$(hex $(sha1 manifests.yaml))`
+* Is it the expected version? i.e. labelled `app.kubernetes.io/version=$(hex $(sha1 /tmp/manifests.yaml))`
 
-If does not exist, is managed, is scaled-down or out of date, then it'll update the workflow controller.
+If does not exist, is managed, is scaled-down or out of date, then it'll apply the manifests creating the appropriate resources.
 
 ## Usage
 
@@ -31,12 +42,6 @@ kubectl create ns argo
 kubectl -n argo apply -f https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/install.yaml
 ```
 
-Tip: you check the behaviour in the operator logs:
-
-```bash
-kubectl -n argo logs deploy/operator --follow
-```
-
 Create a user namespace:
 
 ```bash
@@ -50,19 +55,46 @@ kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable
 kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-default-rolebinding.yaml
 ```
 
-Submit a workflow (which will cause a scale-up):
+Create a workflow (which will cause a scale-up):
 
 ```bash
-argo submit -n my-ns --watch https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+kubectl -n my-ns create -f https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+kubectl -n my-ns wait wf --for=condition=Completed --all
 ```
 
-Delete all workflows (which will cause a scale-down):
+Wait 30s after the workflow finishes, and you'll see it be scale-down.
+
+## Debugging
+
+Tip: you watch for scaling events in the operator logs:
 
 ```bash
-kubectl -n my-ns delete wf --all
+kubectl -n argo logs deploy/operator --follow
+...
+level=info resources=6 scaleDownAfter=30s scaleUpAfter=5s src="https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/namespace-controller-only.yaml" version=346705e749ae8df5686f6fdd5c73ac7ec04963f0
+...
+level=info msg=scaling-up/updating namespace=my-ns
+...
+time="2021-01-06T00:39:29Z" level=info msg=scaling-down namespace=my-ns
+...
+
 ```
 
-## Options
+Scaling results in common Kubernetes events:
+
+```bash
+kubectl -n my-ns get events -w --field-selector=involvedObject.kind=Deployment,involvedObject.name=workflow-controller 
+...
+0s          Normal   ScalingReplicaSet       deployment/workflow-controller              Scaled up replica set workflow-controller-6cc76c86f4 to 1
+...
+0s          Normal   ScalingReplicaSet       deployment/workflow-controller              Scaled down replica set workflow-controller-6cc76c86f4 to 0
+```
+
+
+
+## Usage
+
+You can configure the following flags on the operator:
 
 ```
 Usage:
