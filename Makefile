@@ -4,11 +4,11 @@ build: image manifests/install.yaml manifests/namespace-controller-only.yaml
 dist/operator-linux-amd64: GOARGS = GOOS=linux GOARCH=amd64
 
 dist/operator-%: go.mod $(shell find cmd -type f)
-	CGO_ENABLED=0 $(GOARGS) go build -v -i -o $@ ./cmd
+	goimports -w ./cmd
+	CGO_ENABLED=0 $(GOARGS) go build -v -i -ldflags='-s -w' -o $@ ./cmd
 
 image: dist/operator-linux-amd64
 	docker build . -t argoproj/argo-workflows-operator:latest
-
 
 manifests/install.yaml:
 manifests/namespace-controller-only.yaml:

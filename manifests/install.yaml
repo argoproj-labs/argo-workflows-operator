@@ -102,8 +102,12 @@ spec:
           capabilities:
             drop:
             - ALL
-      nodeSelector:
-        kubernetes.io/os: linux
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
       securityContext:
         runAsNonRoot: true
       serviceAccountName: operator
+      volumes:
+      - emptyDir: {}
+        name: tmp

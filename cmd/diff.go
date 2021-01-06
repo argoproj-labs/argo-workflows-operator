@@ -13,4 +13,3 @@ func diff(old *unstructured.Unstructured, new *unstructured.Unstructured) (strin
 	patch, err := jsonpatch.CreateMergePatch(a, b)
 	return string(patch), err
 }
-

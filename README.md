@@ -21,7 +21,7 @@ If does not exist, is managed, is scaled-down or out of date, then it'll update 
 Install Argo Workflows CRDs:
 
 ```bash
-kustomize build https://github.com/argoproj/argo/manifests/base/crds/minimal\?ref\=stable | kubectl apply -f -
+kustomize build 'https://github.com/argoproj/argo/manifests/base/crds/minimal?ref=stable' | kubectl apply -f -
 ```
 
 Install the operator:
@@ -65,14 +65,14 @@ kubectl -n my-ns delete wf --all
 ## Options
 
 ```
-  -f string
-        source to install, uses go-getter format (default "https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/namespace-controller-only.yaml")
-  -kubeconfig string
-        (optional) absolute path to the kubeconfig src (default "/Users/acollins8/.kube/config")
-  -loglevel string
-        log level: info|debug (default "debug")
-  -scale-down-after duration
-        scale-down after (default 30s)
-  -scale-up-after duration
-        scale-up after (default 10s)
+Usage:
+  operator [flags]
+
+Flags:
+  -f, --file string           manifests to install, https://github.com/hashicorp/go-getter (default "git::https://github.com/argoproj-labs/argo-workflows-operator.git//manifests/namespace-controller-only.yaml")
+  -h, --help                  help for operator
+      --kubeconfig string     path to the kubeconfig (default "/Users/acollins8/.kube/config")
+      --loglevel string       log level: error|warning|info|debug (default "info")
+  -d, --scale-down duration   scale-down after (default 30s)
+  -u, --scale-up duration     scale-up after (default 5s)
 ```
