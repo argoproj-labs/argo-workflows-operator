@@ -33,6 +33,9 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const managedBy = "app.kubernetes.io/managed-by"
+const managerName = "argo-workflows-operator"
+
 func main() {
 	var (
 		kubeconfig     string
@@ -49,6 +52,13 @@ func main() {
 				log.Fatal(err)
 			}
 			log.SetLevel(level)
+
+			log.WithFields(log.Fields{
+				"src":            src,
+				"scaleUpAfter":   scaleUpAfter,
+				"scaleDownAfter": scaleDownAfter,
+				"gitCommit":      gitCommit,
+			}).Info()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -82,14 +92,30 @@ func main() {
 			if err != nil {
 				log.Fatal(fmt.Errorf("failed to read manifests: %w", err))
 			}
-			resources := strings.Split(string(f), "---")
+			var resources []*unstructured.Unstructured
+			for _, part := range strings.Split(string(f), "---") {
+				new := &unstructured.Unstructured{}
+				err = yaml.Unmarshal([]byte(part), new)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if new.GetLabels() == nil {
+					new.SetLabels(map[string]string{})
+				}
+				labels := new.GetLabels()
+				labels[managedBy] = managerName                        // we will not change resource that are not managed
+				labels["app.kubernetes.io/part-of"] = "argo-workflows" // this is only added to help understand what this resource is part-of
+				labels["app.kubernetes.io/version"] = version          // we add the sha1 hash of the resources
+				new.SetLabels(labels)
+				resources = append(resources, new)
+			}
 
 			if len(resources) <= 1 {
 				log.Fatal("<= 1 resources, maybe error getting resources")
 			}
 
 			// starting here
-			log.WithFields(log.Fields{"src": src, "version": version, "scaleUpAfter": scaleUpAfter, "scaleDownAfter": scaleDownAfter, "resources": len(resources)}).Info()
+			log.WithFields(log.Fields{"version": version, "resources": len(resources)}).Info()
 			informers := make([]cache.SharedIndexInformer, 0)
 			countResources := func(namespace string) int {
 				count := 0
@@ -122,31 +148,17 @@ func main() {
 				// perform a dry-run first so we reduce the risk of applying some, but not all, of the resources
 				logCtx.Info("scaling-up/updating")
 				for _, dryRun := range [][]string{{"All"}, nil} {
-					for _, part := range resources {
-						new := &unstructured.Unstructured{}
-						err = yaml.Unmarshal([]byte(part), new)
-						if err != nil {
-							return err
-						}
-						if new.GetLabels() == nil {
-							new.SetLabels(map[string]string{})
-						}
-						labels := new.GetLabels()
-						labels["app.kubernetes.io/managed-by"] = "argo-workflows-operator" // we will not change resource that are not managed
-						labels["app.kubernetes.io/part-of"] = "argo-workflows"             // this is only added to help understand what this resource is part-of
-						labels["app.kubernetes.io/version"] = version
-						new.SetLabels(labels)
-						resource := strings.ToLower(new.GetKind()) + "s"
-						gvr := schema.GroupVersionResource{Group: new.GroupVersionKind().Group, Version: new.GroupVersionKind().Version, Resource: resource}
-						key := fmt.Sprintf("%s/%s", resource, new.GetName())
+					for _, resource := range resources {
+						gvr := gvr(resource)
+						key := fmt.Sprintf("%s/%s", gvr.Resource, resource.GetName())
 						if len(dryRun) > 0 {
 							key = key + " (dry-run)"
 						}
 						r := dy.Resource(gvr).Namespace(namespace)
-						old, err := r.Get(new.GetName(), metav1.GetOptions{})
+						old, err := r.Get(resource.GetName(), metav1.GetOptions{})
 						switch {
 						case apierrors.IsNotFound(err):
-							_, err := r.Create(new, metav1.CreateOptions{DryRun: dryRun})
+							_, err := r.Create(resource, metav1.CreateOptions{DryRun: dryRun})
 							if err != nil {
 								return fmt.Errorf("failed to create %v: %w", key, err)
 							}
@@ -155,11 +167,11 @@ func main() {
 						case err != nil:
 							return fmt.Errorf("failed to get %v: %w", key, err)
 						}
-						if old.GetLabels()["app.kubernetes.io/managed-by"] != "argo-workflows-operator" {
+						if old.GetLabels()[managedBy] != managerName {
 							logCtx.Infof("%v un-managed", key)
 							continue
 						}
-						diffs, err := diff(normalize(old), new)
+						diffs, err := diff(normalize(old), resource)
 						if err != nil {
 							return fmt.Errorf("failed to diff %v: %w", key, err)
 						}
@@ -168,7 +180,7 @@ func main() {
 							continue
 						}
 						logCtx.Debug(diffs)
-						_, err = r.Patch(new.GetName(), types.StrategicMergePatchType, []byte(diffs), metav1.PatchOptions{DryRun: dryRun})
+						_, err = r.Patch(resource.GetName(), types.StrategicMergePatchType, []byte(diffs), metav1.PatchOptions{DryRun: dryRun})
 						if err != nil {
 							return fmt.Errorf("failed to patch %v: %w", key, err)
 						}
@@ -181,6 +193,7 @@ func main() {
 				logCtx := log.WithField("namespace", namespace)
 				logCtx.Info("scaling-down")
 				_, err := k.AppsV1().Deployments(namespace).Patch("workflow-controller", types.MergePatchType, []byte(`{"spec": {"replicas": 0}}`))
+
 				return err
 			}
 
@@ -259,4 +272,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func gvr(new *unstructured.Unstructured) schema.GroupVersionResource {
+	return schema.GroupVersionResource{Group: new.GroupVersionKind().Group, Version: new.GroupVersionKind().Version, Resource: strings.ToLower(new.GetKind()) + "s"}
 }

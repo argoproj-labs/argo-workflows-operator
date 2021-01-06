@@ -4,7 +4,7 @@ build: image manifests/install.yaml manifests/namespace-controller-only.yaml
 dist/operator-linux-amd64: GOARGS = GOOS=linux GOARCH=amd64
 
 dist/operator-%: go.mod $(shell find cmd -type f)
-	CGO_ENABLED=0 $(GOARGS) go build -v -i -ldflags='-s -w' -o $@ ./cmd
+	CGO_ENABLED=0 $(GOARGS) go build -v -i -ldflags='-s -w -X github.com/argoproj-labs/argo-workflows-operator/cmd.gitCommit=$(shell git rev-parse HEAD)' -o $@ ./cmd
 
 image: dist/operator-linux-amd64
 	docker build . -t argoproj/argo-workflows-operator:latest
@@ -23,7 +23,6 @@ start: manifests/install.yaml manifests/namespace-controller-only.yaml image
 	kubectl -n argo rollout restart deploy/operator
 
 test: start
-	kubectl -n argo apply -f https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/install.yaml
 	kubectl get ns my-ns || kubectl create ns my-ns
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-role.yaml
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-default-rolebinding.yaml

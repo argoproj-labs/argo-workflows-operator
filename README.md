@@ -2,16 +2,16 @@
 
 **PROOF OF CONCEPT**
 
-This is not a fully-formed operator (yet).
+This is not a fully-formed or full-tested [Kubernetes operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) (yet).
 
 ## Use Case
 
-* You only need the workflow controller, or your Argo Server is managed elsewhere.
-* You want to install into many namespaces (for isolation) and have the controller be scaled-to-zero for cost-saving.
+* You're managing CRDs installation and the Argo Server elsewhere. Maybe the same place you manage the installation of the operator.
+* You want to install one controller into each namespace (for isolation) and have the controller be scaled-to-zero when not needed for cost-saving.
 
 ## Summary
 
-This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but to scale each installation to zero until needed.
+This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but scale-to-zero until needed. Essentially it combines an application installed and a zero-pod auto-scaler (ZPA). Since the workflow controller does not service HTTP requests, solutions that use that would not work.
 
 When it starts up, it'll get your manifests and save it as `/tmp/manifests.yaml`. 
 
@@ -86,21 +86,38 @@ kubectl -n my-ns get events -w --field-selector=involvedObject.kind=Deployment,i
 0s          Normal   ScalingReplicaSet       deployment/workflow-controller              Scaled down replica set workflow-controller-6cc76c86f4 to 0
 ```
 
+## Upgrading the Controller
 
+The controller is GitOps friendly, modify your deployment with a new file and run this:
+
+```bash
+kubectl -n argo rollout restart deploy/operator
+```
+
+## Manually Deleting Managed Resources
+
+```bash
+kubectl -n my-ns delete cm,sa,role,rolebinding,deploy,svc -l app.kubernetes.io/managed-by=argo-workflows-operator
+````
 
 ## Usage
 
 You can configure the following flags on the operator:
 
-```
+```bash
 Usage:
   operator [flags]
 
 Flags:
   -f, --file string           manifests to install, https://github.com/hashicorp/go-getter (default "git::https://github.com/argoproj-labs/argo-workflows-operator.git//manifests/namespace-controller-only.yaml")
   -h, --help                  help for operator
-      --kubeconfig string     path to the kubeconfig (default "/Users/acollins8/.kube/config")
+      --kubeconfig string     path to the kubeconfig (default "$HOME/.kube/config")
       --loglevel string       log level: error|warning|info|debug (default "info")
   -d, --scale-down duration   scale-down after (default 30s)
   -u, --scale-up duration     scale-up after (default 5s)
 ```
+
+## Roadmap
+
+* We'll want a way to prevent the operator from installing into namespaces. It might be opt-in or might be opt-out.
+* Some namespaces are likely to need some kind of special set-up or configuration, e.g. due to some namespaces being high-load, or having different controller configuration.
