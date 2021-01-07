@@ -98,6 +98,9 @@ func main() {
 				if err != nil {
 					return fmt.Errorf("failed to hash manifests: %w", err)
 				}
+				if hash == app.hash {
+					return nil // un-changed - exit early
+				}
 				f, err := ioutil.ReadFile(manifests)
 				if err != nil {
 					return fmt.Errorf("failed to read manifests: %w", err)
