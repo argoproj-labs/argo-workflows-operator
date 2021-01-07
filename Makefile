@@ -26,6 +26,7 @@ start: manifests/install.yaml manifests/namespace-controller-only.yaml image
 
 test: start
 	kubectl get ns my-ns || kubectl create ns my-ns
+	kubectl annotate ns my-ns argo-workflows-operator.argoproj-labs.io/opt-in=true --overwrite
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-role.yaml
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-default-rolebinding.yaml
 	kubectl -n my-ns apply -f test/workflow-controller-configmap.yaml

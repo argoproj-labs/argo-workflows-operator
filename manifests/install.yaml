@@ -9,6 +9,12 @@ metadata:
   name: argo-workflows-operator
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+- apiGroups:
   - argoproj.io
   resources:
   - workflows

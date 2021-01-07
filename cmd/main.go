@@ -36,6 +36,7 @@ const (
 	managedByLabel = "app.kubernetes.io/managed-by"
 	managerName    = "argo-workflows-operator"
 	hashLabel      = "argo-workflows-operator.argoproj-labs.io/hash"
+	optAnnotation  = "argo-workflows-operator.argoproj-labs.io/opt-in" // maybe `true` or `false`
 )
 
 type appDefn struct {
@@ -49,6 +50,7 @@ func main() {
 		scaleUpAfter   time.Duration
 		scaleDownAfter time.Duration
 		src            string
+		optIn          bool
 		logLevel       string
 	)
 	cmd := &cobra.Command{
@@ -65,6 +67,7 @@ func main() {
 				"scaleUpAfter":   scaleUpAfter,
 				"scaleDownAfter": scaleDownAfter,
 				"gitCommit":      gitCommit,
+				"optIn":          optIn,
 			}).Info()
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -147,6 +150,18 @@ func main() {
 
 			scaleUp := func(namespace string) error {
 				logCtx := log.WithField("namespace", namespace)
+				ns, err := k.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				opt := ns.GetAnnotations()[optAnnotation]
+				switch {
+				case opt == "true": // ok to proceed
+				case opt == "false":
+					return nil
+				case !optIn:
+					return nil
+				}
 				deploy, err := k.AppsV1().Deployments(namespace).Get("workflow-controller", metav1.GetOptions{})
 				switch {
 				case apierrors.IsNotFound(err):
@@ -273,7 +288,7 @@ func main() {
 
 			// sync the manifests every 1m
 			go func() {
-				for range time.Tick(1*time.Minute){
+				for range time.Tick(1 * time.Minute) {
 					select {
 					case <-ctx.Done():
 						return
@@ -301,6 +316,7 @@ func main() {
 	cmd.Flags().DurationVarP(&scaleUpAfter, "scale-up", "u", 5*time.Second, "scale-up after")
 	cmd.Flags().DurationVarP(&scaleDownAfter, "scale-down", "d", 30*time.Second, "scale-down after")
 	cmd.Flags().StringVarP(&src, "file", "f", "https://raw.githubusercontent.com/argoproj-labs/argo-workflows-operator/master/manifests/namespace-controller-only.yaml", "manifests to install, https://github.com/hashicorp/go-getter")
+	cmd.Flags().BoolVar(&optIn, "opt-in", false, "if namespaces are opted in by default")
 	cmd.Flags().StringVar(&logLevel, "loglevel", "info", "log level: error|warning|info|debug")
 	err := cmd.Execute()
 	if err != nil {

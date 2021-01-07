@@ -3,13 +3,14 @@ kind: ClusterRole
 metadata:
   name: argo-workflows-operator
 rules:
+  # we need to be able to see if the included/exclude annotation is applied to it
   - apiGroups:
       - ""
     resources:
       - namespaces
     verbs:
       - get
-  # triggering
+  # we need to be able to see if resources have been created
   - apiGroups:
       - argoproj.io
     resources:
@@ -18,7 +19,7 @@ rules:
     verbs:
       - list
       - watch
-  # apply
+  # we need to be able to install the controller
   - apiGroups:
       - apps
     resources:
@@ -43,6 +44,7 @@ rules:
       - create
       - get
       - patch
+      # we need to be able to escalate permissions
       - escalate
       - bind
   - apiGroups:
