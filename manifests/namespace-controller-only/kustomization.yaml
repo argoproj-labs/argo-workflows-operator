@@ -2,8 +2,8 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - https://github.com/argoproj/argo/manifests/base/workflow-controller?ref=stable
-  - https://github.com/argoproj/argo/manifests/namespace-install/workflow-controller-rbac?ref=stable
+  - https://github.com/argoproj/argo/manifests/base/workflow-controller?ref=v2.12.2
+  - https://github.com/argoproj/argo/manifests/namespace-install/workflow-controller-rbac?ref=v2.12.2
 
 patchesJson6902:
   - target:

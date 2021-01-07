@@ -3,4 +3,5 @@ kind: ConfigMap
 metadata:
   name: workflow-controller-configmap
 data:
+  # for out tests we need this, and it demonstrates what happens if you configure a resource
   containerRuntimeExecutor: pns

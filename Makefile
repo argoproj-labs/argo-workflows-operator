@@ -28,8 +28,9 @@ test: start
 	kubectl get ns my-ns || kubectl create ns my-ns
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-role.yaml
 	kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable/manifests/quick-start/base/workflow-default-rolebinding.yaml
+	kubectl -n my-ns apply -f test/workflow-controller-configmap.yaml
 	kubectl -n my-ns delete wf --all
-	kubectl -n my-ns create -f https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+	kubectl -n my-ns create -f https://raw.githubusercontent.com/argoproj/argo/stable/examples/hello-world.yaml
 	kubectl -n my-ns wait wf --for=condition=Completed --all
 	kubectl -n argo logs deploy/operator --follow
 

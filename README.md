@@ -2,26 +2,34 @@
 
 **PROOF OF CONCEPT**
 
-This is not a fully-formed or full-tested [Kubernetes operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) (yet).
+This is not a fully-formed or
+full-tested [Kubernetes operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) (yet).
 
 ## Use Case
 
-* You're managing CRDs installation and the Argo Server elsewhere. Maybe the same place you manage the installation of the operator.
-* You want to install one controller into each namespace (for isolation) and have the controller be scaled-to-zero when not needed for cost-saving.
+* You're managing CRDs installation and the Argo Server elsewhere. Maybe the same place you manage the installation of
+  the operator.
+* You want to install one controller into each namespace (for isolation) and have the controller be scaled-to-zero when
+  not needed for cost-saving.
 
 ## Summary
 
-This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but scale-to-zero until needed. Essentially it combines an application installed and a zero-pod auto-scaler (ZPA). Since the workflow controller does not service HTTP requests, solutions that use that would not work.
+This operator is intended to address the problem of installing Argo Workflows into multiple namespaces, but
+scale-to-zero until needed. Essentially it combines an application installed and a zero-pod auto-scaler (ZPA). Since the
+workflow controller does not service HTTP requests, solutions that use that would not work.
 
-When it starts up, it'll get your manifests and save it as `/tmp/manifests.yaml`. 
+When it starts up, it'll get your manifests and save it as `/tmp/manifests.yaml`.
 
-The operator keeps count of `cronworkflows` and incomplete `workflows`. When the count for a namespace in greater than zero, it waits a short period of time (`scale-up`) and then checks:
+The operator keeps count of `cronworkflows` and incomplete `workflows`. When the count for a namespace in greater than
+zero, it waits a short period of time (`scale-up`) and then checks:
 
 * Is there a workflow controller in the namespace which is already scaled up?
 * Is it managed by the operator? i.e. labelled `app.kubernetes.io/managed-by=argo-workflows-operator`
-* Is it the expected hash? i.e. labelled `argo-workflows-operator.argoproj-labs.io/hash=$(hex $(sha1 /tmp/manifests.yaml))`
+* Is it the expected hash? i.e.
+  labelled `argo-workflows-operator.argoproj-labs.io/hash=$(hex $(sha1 /tmp/manifests.yaml))`
 
-If does not exist, is managed, is scaled-down or out of date, then it'll apply the manifests creating the appropriate resources.
+If does not exist, is managed, is scaled-down or out of date, then it'll apply the manifests creating the appropriate
+resources.
 
 ## Usage
 
@@ -54,11 +62,39 @@ kubectl -n my-ns apply -f https://raw.githubusercontent.com/argoproj/argo/stable
 Create a workflow (which will cause a scale-up):
 
 ```bash
-kubectl -n my-ns create -f https://raw.githubusercontent.com/argoproj/argo/master/examples/hello-world.yaml
+kubectl -n my-ns create -f https://raw.githubusercontent.com/argoproj/argo/stable/examples/hello-world.yaml
 kubectl -n my-ns wait wf --for=condition=Completed --all
 ```
 
 Wait 30s after the workflow finishes, and you'll see it be scale-down.
+
+## Upgrading Your Manifests
+
+Change the file at the URL. Wait 1m. When the next workflow is scheduled, the manifests will be updated.
+
+## Customizing Each Namespace's Configuration
+
+The operator will only update resources that are labelled `app.kubernetes.io/managed-by=argo-workflows-operator`.
+
+Remove or change this label on any resource you want to manage outside the operator.
+
+Use cases:
+
+* You want to install a generic set-up, but allow the user to change later.
+* You want to manually manage one of the resources.
+
+Example:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-controller-configmap
+  labels:
+    app.kubernetes.io/managed-by: foo
+data:
+  parallelism: 10
+```
 
 ## Debugging
 
@@ -120,4 +156,5 @@ Flags:
 ## Roadmap
 
 * We might want a way to prevent the operator from installing into namespaces. It might be opt-in or might be opt-out.
-* Some namespaces are likely to need some kind of special set-up or configuration, e.g. due to some namespaces being high-load, or having different controller configuration.
+* Some namespaces are likely to need some kind of special set-up or configuration, e.g. due to some namespaces being
+  high-load, or having different controller configuration.

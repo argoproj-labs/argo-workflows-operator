@@ -32,9 +32,16 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-const managedByLabel = "app.kubernetes.io/managed-by"
-const managerName = "argo-workflows-operator"
-const hashLabel = "argo-workflows-operator.argoproj-labs.io/hash"
+const (
+	managedByLabel = "app.kubernetes.io/managed-by"
+	managerName    = "argo-workflows-operator"
+	hashLabel      = "argo-workflows-operator.argoproj-labs.io/hash"
+)
+
+type appDefn struct {
+	hash      string
+	resources []*unstructured.Unstructured
+}
 
 func main() {
 	var (
@@ -80,42 +87,49 @@ func main() {
 
 			// get manifests
 			manifests := "/tmp/manifests.yaml"
-			err = downloadFile(manifests, src)
-			if err != nil {
-				log.Fatal(fmt.Errorf("failed to download manifests: %w", err))
-			}
-			hash, err := hashFile(manifests)
-			if err != nil {
-				log.Fatal(fmt.Errorf("failed to hash manifests: %w", err))
-			}
-			f, err := ioutil.ReadFile(manifests)
-			if err != nil {
-				log.Fatal(fmt.Errorf("failed to read manifests: %w", err))
-			}
-			var resources []*unstructured.Unstructured
-			for _, part := range strings.Split(string(f), "---") {
-				new := &unstructured.Unstructured{}
-				err = yaml.Unmarshal([]byte(part), new)
+			var app appDefn
+
+			syncManifests := func() error {
+				err = downloadFile(manifests, src)
 				if err != nil {
-					log.Fatal(err)
+					return fmt.Errorf("failed to download manifests: %w", err)
 				}
-				if new.GetLabels() == nil {
-					new.SetLabels(map[string]string{})
+				hash, err := hashFile(manifests)
+				if err != nil {
+					return fmt.Errorf("failed to hash manifests: %w", err)
 				}
-				labels := new.GetLabels()
-				labels[managedByLabel] = managerName // we will not change resource that are not managed
-				labels[hashLabel] = hash             // we add the sha1 hash of the resources
-				new.SetLabels(labels)
-				resources = append(resources, new)
+				f, err := ioutil.ReadFile(manifests)
+				if err != nil {
+					return fmt.Errorf("failed to read manifests: %w", err)
+				}
+				var resources []*unstructured.Unstructured
+				for _, part := range strings.Split(string(f), "---") {
+					new := &unstructured.Unstructured{}
+					err = yaml.Unmarshal([]byte(part), new)
+					if err != nil {
+						return fmt.Errorf("failed to unmarshall YAML: %ww", err)
+					}
+					if new.GetLabels() == nil {
+						new.SetLabels(map[string]string{})
+					}
+					labels := new.GetLabels()
+					labels[managedByLabel] = managerName // we will not change resource that are not managed
+					labels[hashLabel] = hash             // we add the sha1 hash of the resources
+					new.SetLabels(labels)
+					resources = append(resources, new)
+				}
+				log.WithFields(log.Fields{"hash": hash, "resources": len(resources)}).Info("manifests synced")
+				app = appDefn{hash, resources}
+				return nil
 			}
 
-			if len(resources) <= 1 {
-				log.Fatal("<= 1 resources, maybe error getting resources")
+			err = syncManifests()
+			if err != nil {
+				log.Fatal(err)
 			}
 
-			// starting here
-			log.WithFields(log.Fields{"hash": hash, "resources": len(resources)}).Info()
 			informers := make([]cache.SharedIndexInformer, 0)
+
 			countResources := func(namespace string) int {
 				count := 0
 				for _, informer := range informers {
@@ -127,6 +141,7 @@ func main() {
 				}
 				return count
 			}
+
 			scaleUp := func(namespace string) error {
 				logCtx := log.WithField("namespace", namespace)
 				deploy, err := k.AppsV1().Deployments(namespace).Get("workflow-controller", metav1.GetOptions{})
@@ -138,7 +153,7 @@ func main() {
 					// is found
 					scaledUp := deploy.Spec.Replicas == nil || *deploy.Spec.Replicas >= 1
 					oldVersion := deploy.GetLabels()[hashLabel]
-					upToDate := oldVersion == hash
+					upToDate := oldVersion == app.hash
 					logCtx.WithFields(log.Fields{"scaledUp": scaledUp, "upToDate": upToDate, "oldVersion": oldVersion}).Debug()
 					if upToDate && scaledUp {
 						return nil
@@ -147,7 +162,7 @@ func main() {
 				// perform a dry-run first so we reduce the risk of applying some, but not all, of the resources
 				logCtx.Info("scaling-up/updating")
 				for _, dryRun := range [][]string{{"All"}, nil} {
-					for _, resource := range resources {
+					for _, resource := range app.resources {
 						gvr := gvr(resource)
 						key := fmt.Sprintf("%s/%s", gvr.Resource, resource.GetName())
 						if len(dryRun) > 0 {
@@ -167,7 +182,7 @@ func main() {
 							return fmt.Errorf("failed to get %v: %w", key, err)
 						}
 						if old.GetLabels()[managedByLabel] != managerName {
-							logCtx.Infof("%v un-managed", key)
+							logCtx.Warnf("%v un-managed", key)
 							continue
 						}
 						diffs, err := diff(normalize(old), resource)
@@ -188,6 +203,7 @@ func main() {
 				}
 				return nil
 			}
+
 			scaleDown := func(namespace string) error {
 				logCtx := log.WithField("namespace", namespace)
 				logCtx.Info("scaling-down")
@@ -196,6 +212,7 @@ func main() {
 			}
 
 			queue := workqueue.NewDelayingQueue()
+
 			reconcile := func(obj interface{}) {
 				namespace := obj.(metav1.Object).GetNamespace()
 				logCtx := log.WithField("namespace", namespace)
@@ -227,6 +244,7 @@ func main() {
 				go informer.Run(ctx.Done())
 			}
 
+			// start the work-queue
 			go func() {
 				for {
 					key, shutdown := queue.Get()
@@ -246,6 +264,21 @@ func main() {
 					}()
 					if err != nil {
 						logCtx.WithError(err).Error("failed to scale-up/down")
+					}
+				}
+			}()
+
+			// sync the manifests every 1m
+			go func() {
+				for range time.Tick(1*time.Minute){
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						err := syncManifests()
+						if err != nil {
+							log.WithError(err).Error("failed to get manifests")
+						}
 					}
 				}
 			}()
