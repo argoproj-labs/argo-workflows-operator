@@ -2,8 +2,7 @@
 
 **PROOF OF CONCEPT**
 
-This is not a fully-formed or
-full-tested [Kubernetes operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) (yet).
+This is not a fully-formed or full-tested [Kubernetes operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) (yet).
 
 ## Use Case
 
