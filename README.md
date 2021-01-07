@@ -72,6 +72,8 @@ Wait 30s after the workflow finishes, and you'll see it be scale-down.
 
 Change the file at the URL. Wait 1m. When the next workflow is scheduled, the manifests will be updated.
 
+Tip: add the label `app.kubernetes.io/version` so you know which version you've installed (e.g. using Kustomize common labels)
+
 ## Customizing Each Namespace's Configuration
 
 The operator will only update resources that are labelled `app.kubernetes.io/managed-by=argo-workflows-operator`.

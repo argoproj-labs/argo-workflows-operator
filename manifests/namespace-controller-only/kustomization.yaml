@@ -5,6 +5,9 @@ resources:
   - https://github.com/argoproj/argo/manifests/base/workflow-controller?ref=v2.12.2
   - https://github.com/argoproj/argo/manifests/namespace-install/workflow-controller-rbac?ref=v2.12.2
 
+commonLabels:
+  app.kubernetes.io/version: v2.12.2
+
 patchesJson6902:
   - target:
       version: v1
